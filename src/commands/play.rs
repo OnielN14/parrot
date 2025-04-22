@@ -2,6 +2,7 @@ use crate::{
     commands::{skip::force_skip_top_track, summon::summon},
     errors::{verify, ParrotError},
     guild::{
+        http_client::HttpClientInstance,
         settings::{GuildSettings, GuildSettingsMap},
         stored_queue::{GuildStoredQueue, GuildStoredQueueMap},
     },
@@ -162,7 +163,11 @@ pub async fn play(ctx: &Context, interaction: &mut CommandInteraction) -> Result
 
     guild_stored_queue.queue.push(query_type.clone());
     guild_stored_queue.continue_play = true;
+
     drop(data);
+
+    let data = ctx.data.read().await;
+    let http_client = data.get::<HttpClientInstance>().unwrap();
 
     // reply with a temporary message while we fetch the source
     // needed because interactions must be replied within 3s and queueing takes longer
@@ -179,14 +184,15 @@ pub async fn play(ctx: &Context, interaction: &mut CommandInteraction) -> Result
         }
         Mode::Next => match query_type.clone() {
             QueryType::Keywords(_) | QueryType::VideoLink(_) => {
-                let queue = insert_track(&call, &query_type, 1).await?;
+                let queue = insert_track(&call, http_client, &query_type, 1).await?;
                 update_queue_messages(&ctx.http, &ctx.data, &queue, guild_id).await;
             }
             QueryType::PlaylistLink(url) => {
-                let urls = get_urls_from_playlist(url, None).await?;
+                let urls = get_urls_from_playlist(http_client, url, None).await?;
 
                 for (idx, url) in urls.into_iter().flatten().enumerate() {
-                    let Ok(queue) = insert_track(&call, &QueryType::VideoLink(url), idx + 1).await
+                    let Ok(queue) =
+                        insert_track(&call, http_client, &QueryType::VideoLink(url), idx + 1).await
                     else {
                         continue;
                     };
@@ -196,14 +202,15 @@ pub async fn play(ctx: &Context, interaction: &mut CommandInteraction) -> Result
             QueryType::KeywordList(keywords_list) => {
                 for (idx, keywords) in keywords_list.into_iter().enumerate() {
                     let queue =
-                        insert_track(&call, &QueryType::Keywords(keywords), idx + 1).await?;
+                        insert_track(&call, http_client, &QueryType::Keywords(keywords), idx + 1)
+                            .await?;
                     update_queue_messages(&ctx.http, &ctx.data, &queue, guild_id).await;
                 }
             }
         },
         Mode::Jump => match query_type.clone() {
             QueryType::Keywords(_) | QueryType::VideoLink(_) => {
-                let mut queue = enqueue_track(&call, &query_type).await?;
+                let mut queue = enqueue_track(&call, http_client, &query_type).await?;
 
                 if !queue_was_empty {
                     rotate_tracks(&call, 1).await.ok();
@@ -213,13 +220,14 @@ pub async fn play(ctx: &Context, interaction: &mut CommandInteraction) -> Result
                 update_queue_messages(&ctx.http, &ctx.data, &queue, guild_id).await;
             }
             QueryType::PlaylistLink(url) => {
-                let urls = get_urls_from_playlist(url, None).await?;
+                let urls = get_urls_from_playlist(http_client, url, None).await?;
 
                 let mut insert_idx = 1;
 
                 for (i, url) in urls.into_iter().flatten().enumerate() {
                     let Ok(mut queue) =
-                        insert_track(&call, &QueryType::VideoLink(url), insert_idx).await
+                        insert_track(&call, http_client, &QueryType::VideoLink(url), insert_idx)
+                            .await
                     else {
                         continue;
                     };
@@ -237,8 +245,13 @@ pub async fn play(ctx: &Context, interaction: &mut CommandInteraction) -> Result
                 let mut insert_idx = 1;
 
                 for (i, keywords) in keywords_list.into_iter().enumerate() {
-                    let mut queue =
-                        insert_track(&call, &QueryType::Keywords(keywords), insert_idx).await?;
+                    let mut queue = insert_track(
+                        &call,
+                        http_client,
+                        &QueryType::Keywords(keywords),
+                        insert_idx,
+                    )
+                    .await?;
 
                     if i == 0 && !queue_was_empty {
                         queue = force_skip_top_track(&call.lock().await).await?;
@@ -252,10 +265,12 @@ pub async fn play(ctx: &Context, interaction: &mut CommandInteraction) -> Result
         },
         Mode::All | Mode::Reverse | Mode::Shuffle => match query_type.clone() {
             QueryType::VideoLink(url) | QueryType::PlaylistLink(url) => {
-                let urls = get_urls_from_playlist(url, None).await?;
+                let urls = get_urls_from_playlist(http_client, url, None).await?;
 
                 for url in urls.into_iter().flatten() {
-                    let Ok(queue) = enqueue_track(&call, &QueryType::VideoLink(url)).await else {
+                    let Ok(queue) =
+                        enqueue_track(&call, http_client, &QueryType::VideoLink(url)).await
+                    else {
                         continue;
                     };
                     update_queue_messages(&ctx.http, &ctx.data, &queue, guild_id).await;
@@ -263,7 +278,8 @@ pub async fn play(ctx: &Context, interaction: &mut CommandInteraction) -> Result
             }
             QueryType::KeywordList(keywords_list) => {
                 for keywords in keywords_list.into_iter() {
-                    let queue = enqueue_track(&call, &QueryType::Keywords(keywords)).await?;
+                    let queue =
+                        enqueue_track(&call, http_client, &QueryType::Keywords(keywords)).await?;
                     update_queue_messages(&ctx.http, &ctx.data, &queue, guild_id).await;
                 }
             }
@@ -406,9 +422,7 @@ async fn create_queued_embed(
     embed.footer(CreateEmbedFooter::new(footer_text))
 }
 
-fn get_track_source(query_type: QueryType) -> YoutubeDl {
-    let http_client = reqwest::Client::new();
-
+fn get_track_source(http_client: reqwest::Client, query_type: QueryType) -> YoutubeDl {
     match query_type {
         QueryType::VideoLink(url) => YoutubeDl::new(http_client, url),
 
@@ -419,27 +433,34 @@ fn get_track_source(query_type: QueryType) -> YoutubeDl {
 
 async fn enqueue_track(
     call: &Arc<Mutex<Call>>,
+    http_client: &reqwest::Client,
     query_type: &QueryType,
 ) -> Result<Vec<TrackHandle>, ParrotError> {
-    let source = get_track_source(query_type.clone());
+    let source = get_track_source(http_client.clone(), query_type.clone());
 
     let mut source_c = source.clone();
     let mut handler = call.lock().await;
     let track_handler = handler.enqueue_input(source.clone().into()).await;
 
     let mut track_handle_typemap = track_handler.typemap().write().await;
-    track_handle_typemap.insert::<AuxMetadataTypeMapKey>(
-        source_c
-            .aux_metadata()
-            .await
-            .map_err(|_| ParrotError::Other("Unable to get AuxMetadata"))?,
-    );
+    let aux_metadata = source_c.aux_metadata().await.map_err(|err| {
+        println!("{:?}", err);
+
+        ParrotError::Other("Unable to get AuxMetadata")
+    })?;
+
+    track_handle_typemap.insert::<AuxMetadataTypeMapKey>(aux_metadata.clone());
+
+    if let Some(title) = aux_metadata.title {
+        println!("[INFO] queueing {}", title);
+    }
 
     Ok(handler.queue().current_queue())
 }
 
 async fn insert_track(
     call: &Arc<Mutex<Call>>,
+    http_client: &reqwest::Client,
     query_type: &QueryType,
     idx: usize,
 ) -> Result<Vec<TrackHandle>, ParrotError> {
@@ -448,7 +469,7 @@ async fn insert_track(
     drop(handler);
 
     if queue_size <= 1 {
-        let queue = enqueue_track(call, query_type).await?;
+        let queue = enqueue_track(call, http_client, query_type).await?;
         return Ok(queue);
     }
 
@@ -457,7 +478,7 @@ async fn insert_track(
         ParrotError::NotInRange("index", idx as isize, 1, queue_size as isize),
     )?;
 
-    enqueue_track(call, query_type).await?;
+    enqueue_track(call, http_client, query_type).await?;
 
     let handler = call.lock().await;
     handler.queue().modify_queue(|queue| {
@@ -496,17 +517,21 @@ pub async fn normal_query_type_resolver(
     query_type: &QueryType,
     mode: Mode,
 ) -> Result<(), ParrotError> {
+    let data_instance = data.read().await;
+    let http_client = data_instance.get::<HttpClientInstance>().unwrap();
+
     match query_type.clone() {
         QueryType::Keywords(_) | QueryType::VideoLink(_) => {
-            let queue = enqueue_track(call, query_type).await?;
+            let queue = enqueue_track(call, http_client, query_type).await?;
             update_queue_messages(http, data, &queue, guild_id).await;
             Ok(())
         }
         QueryType::PlaylistLink(url) => {
-            let urls = get_urls_from_playlist(url, Some(mode)).await?;
+            let urls = get_urls_from_playlist(http_client, url, Some(mode)).await?;
 
             for url in urls.iter().filter_map(|v| v.clone()) {
-                let Ok(queue) = enqueue_track(call, &QueryType::VideoLink(url.to_string())).await
+                let Ok(queue) =
+                    enqueue_track(call, http_client, &QueryType::VideoLink(url.to_string())).await
                 else {
                     continue;
                 };
@@ -516,7 +541,12 @@ pub async fn normal_query_type_resolver(
         }
         QueryType::KeywordList(keywords_list) => {
             for keywords in keywords_list.iter() {
-                let queue = enqueue_track(call, &QueryType::Keywords(keywords.to_string())).await?;
+                let queue = enqueue_track(
+                    call,
+                    http_client,
+                    &QueryType::Keywords(keywords.to_string()),
+                )
+                .await?;
                 update_queue_messages(http, data, &queue, guild_id).await;
             }
             Ok(())
@@ -525,10 +555,11 @@ pub async fn normal_query_type_resolver(
 }
 
 pub async fn get_urls_from_playlist(
+    http_client: &reqwest::Client,
     url: String,
     mode: Option<Mode>,
 ) -> Result<Vec<Option<String>>, ParrotError> {
-    let ytdl = YoutubeDl::new(reqwest::Client::new(), url);
+    let ytdl = YoutubeDl::new(http_client.clone(), url);
     let mut args = vec!["--flat-playlist", "-j"];
 
     if let Some(mode) = mode {

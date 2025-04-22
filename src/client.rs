@@ -1,10 +1,14 @@
+use reqwest;
 use serenity::model::gateway::GatewayIntents;
 use songbird::serenity::SerenityInit;
 
 use std::{collections::HashMap, env, error::Error};
 
 use crate::{
-    guild::{cache::GuildCacheMap, settings::GuildSettingsMap, stored_queue::GuildStoredQueueMap},
+    guild::{
+        cache::GuildCacheMap, http_client::HttpClientInstance, settings::GuildSettingsMap,
+        stored_queue::GuildStoredQueueMap,
+    },
     handlers::SerenityHandler,
 };
 
@@ -35,6 +39,7 @@ impl Client {
         data.insert::<GuildCacheMap>(HashMap::default());
         data.insert::<GuildSettingsMap>(HashMap::default());
         data.insert::<GuildStoredQueueMap>(HashMap::default());
+        data.insert::<HttpClientInstance>(reqwest::Client::new());
 
         drop(data);
 

@@ -14,7 +14,14 @@ pub async fn repeat(
     let call = manager.get(guild_id).unwrap();
 
     let handler = call.lock().await;
-    let track = handler.queue().current().unwrap();
+    let track = match handler.queue().current() {
+        Some(track) => track,
+        None => {
+            let _ = create_response(&ctx.http, interaction, ParrotMessage::Error).await;
+
+            return Ok(());
+        }
+    };
 
     let was_looping = track.get_info().await.unwrap().loops == LoopState::Infinite;
     let toggler = if was_looping {
