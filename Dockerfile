@@ -3,9 +3,7 @@
 FROM rust:1.74.0-slim-bookworm AS build
 
 RUN apt-get update && apt-get install -y \
-    build-essential autoconf automake cmake libtool libssl-dev pkg-config wget
-
-RUN wget https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -O /usr/local/bin/yt-dlp
+    build-essential autoconf automake cmake libtool libssl-dev pkg-config
 
 WORKDIR "/parrot"
 
@@ -23,10 +21,8 @@ RUN cargo build --release --locked
 # Necessary dependencies to run Parrot
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install ffmpeg -y
-COPY --from=build /usr/local/bin/yt-dlp /usr/local/bin/yt-dlp
-RUN chmod a+rx /usr/local/bin/yt-dlp 
+RUN apt-get update && apt-get install ffmpeg wget -y
 
 COPY --from=build /parrot/target/release/parrot .
-
-CMD ["./parrot"]
+COPY ./entrypoint.sh .
+ENTRYPOINT ["sh", "./entrypoint.sh"]
