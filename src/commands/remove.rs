@@ -1,13 +1,14 @@
 use crate::{
-    errors::{verify, ParrotError},
+    errors::{ParrotError, verify},
     guild::stored_queue::GuildStoredQueueMap,
     handlers::track_end::update_queue_messages,
     messaging::{message::ParrotMessage, messages::REMOVED_QUEUE},
-    utils::{create_embed_response, create_response, AuxMetadataTypeMapKey},
+    utils::{create_embed_response, create_response, get_track_metadata},
 };
-use serenity::{all::CommandInteraction, builder::CreateEmbed, client::Context};
+use serenity::{all::CommandInteraction, builder::CreateEmbed, client::Context, prelude::TypeMap};
 use songbird::tracks::TrackHandle;
-use std::{cmp::min, convert::TryInto};
+use std::{cmp::min, convert::TryInto, sync::Arc};
+use tokio::sync::RwLock;
 
 pub async fn remove(
     ctx: &Context,
@@ -68,7 +69,7 @@ pub async fn remove(
     drop(data);
 
     if remove_until == remove_index {
-        let embed = create_remove_enqueued_embed(track).await;
+        let embed = create_remove_enqueued_embed(track, &ctx.data).await?;
         create_embed_response(&ctx.http, interaction, embed).await?;
     } else {
         create_response(&ctx.http, interaction, ParrotMessage::RemoveMultiple).await?;
@@ -78,15 +79,14 @@ pub async fn remove(
     Ok(())
 }
 
-async fn create_remove_enqueued_embed(track: &TrackHandle) -> CreateEmbed {
+async fn create_remove_enqueued_embed(
+    track: &TrackHandle,
+    data: &Arc<RwLock<TypeMap>>,
+) -> Result<CreateEmbed, ParrotError> {
     let embed = CreateEmbed::default();
-    let track_typemap_read_lock = track.typemap().read().await;
-    let metadata = track_typemap_read_lock
-        .get::<AuxMetadataTypeMapKey>()
-        .unwrap()
-        .clone();
+    let metadata = get_track_metadata(track, data).await?;
 
-    embed
+    Ok(embed
         .field(
             REMOVED_QUEUE,
             format!(
@@ -96,5 +96,5 @@ async fn create_remove_enqueued_embed(track: &TrackHandle) -> CreateEmbed {
             ),
             false,
         )
-        .thumbnail(metadata.thumbnail.unwrap())
+        .thumbnail(metadata.thumbnail.unwrap()))
 }

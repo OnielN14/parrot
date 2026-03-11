@@ -1,8 +1,8 @@
 # Build image
 # Necessary dependencies to build Parrot
-FROM rust:1.74.0-slim-bookworm AS build
+FROM rust:1.93-slim AS build
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install  --no-install-recommends -y \
     build-essential autoconf automake cmake libtool libssl-dev pkg-config
 
 WORKDIR "/parrot"
@@ -19,9 +19,10 @@ RUN cargo build --release --locked
 
 # Release image
 # Necessary dependencies to run Parrot
-FROM debian:bookworm-slim
+FROM debian:stable-slim
 
-RUN apt-get update && apt-get install ffmpeg wget -y
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg wget && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /parrot/target/release/parrot .
 COPY ./entrypoint.sh .

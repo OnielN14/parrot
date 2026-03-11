@@ -18,6 +18,6 @@ pub async fn now_playing(
         .current()
         .ok_or(ParrotError::NothingPlaying)?;
 
-    let embed = create_now_playing_embed(&track).await;
+    let embed = create_now_playing_embed(&track, &ctx.data).await?;
     create_embed_response(&ctx.http, interaction, embed).await
 }

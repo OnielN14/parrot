@@ -1,10 +1,10 @@
 use crate::{
-    errors::{verify, ParrotError},
+    errors::{ParrotError, verify},
     messaging::message::ParrotMessage,
-    utils::{create_response, AuxMetadataTypeMapKey},
+    utils::{create_response, get_track_metadata},
 };
 use serenity::{all::CommandInteraction, client::Context};
-use songbird::{tracks::TrackHandle, Call};
+use songbird::{Call, tracks::TrackHandle};
 use std::cmp::min;
 use tokio::sync::MutexGuard;
 
@@ -42,11 +42,7 @@ pub async fn create_skip_response(
 ) -> Result<(), ParrotError> {
     match handler.queue().current() {
         Some(track) => {
-            let track_typemap_read_lock = track.typemap().read().await;
-            let metadata = track_typemap_read_lock
-                .get::<AuxMetadataTypeMapKey>()
-                .unwrap()
-                .clone();
+            let metadata = get_track_metadata(&track, &ctx.data).await?;
 
             create_response(
                 &ctx.http,
