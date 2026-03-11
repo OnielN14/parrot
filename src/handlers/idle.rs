@@ -1,8 +1,8 @@
 use serenity::{all::CommandInteraction, async_trait, http::Http};
-use songbird::{tracks::PlayMode, Event, EventContext, EventHandler, Songbird};
+use songbird::{Event, EventContext, EventHandler, Songbird, tracks::PlayMode};
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
     Arc,
+    atomic::{AtomicUsize, Ordering},
 };
 
 use crate::messaging::messages::IDLE_ALERT;

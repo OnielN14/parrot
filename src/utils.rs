@@ -111,11 +111,11 @@ pub async fn get_track_metadata(
     let metadata = metadata_store
         .retrieve_metadata(&track.uuid().to_string())
         .ok_or(ParrotError::Other("Unable to retrieve metadata"))
-        .cloned();
+        .cloned()?;
 
     drop(ctx_data);
 
-    Ok(metadata?)
+    Ok(metadata)
 
     // let data = Arc::into_inner(track.data::<Arc<AuxMetadata>>())
     //     .ok_or(ParrotError::Other("Unable to retrieve metadata"))?;

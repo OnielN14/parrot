@@ -209,7 +209,7 @@ async fn build_queue_page(
     let mut description = String::new();
 
     for (i, t) in queue.iter().enumerate() {
-        let metadata = get_track_metadata(&t, data).await;
+        let metadata = get_track_metadata(t, data).await;
 
         let (title, url, duration): (String, String, String) = match metadata {
             Ok(metadata) => {

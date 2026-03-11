@@ -1,5 +1,5 @@
 use crate::{
-    errors::{verify, ParrotError},
+    errors::{ParrotError, verify},
     guild::stored_queue::GuildStoredQueueMap,
     handlers::track_end::update_queue_messages,
     messaging::message::ParrotMessage,
