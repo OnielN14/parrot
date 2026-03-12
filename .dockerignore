@@ -12,3 +12,7 @@ README.md
 # Cargo files
 **/*.rs.bk
 /target/
+/data
+
+.env
+.env.example
