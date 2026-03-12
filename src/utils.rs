@@ -1,4 +1,5 @@
 use serenity::{
+    Error,
     all::{
         CommandInteraction, CreateEmbedAuthor, CreateEmbedFooter, CreateInteractionResponse,
         CreateInteractionResponseMessage, EditInteractionResponse,
@@ -6,14 +7,16 @@ use serenity::{
     builder::CreateEmbed,
     http::{Http, HttpError},
     model::channel::Message,
-    prelude::TypeMapKey,
-    Error,
+    prelude::{TypeMap, TypeMapKey},
 };
 use songbird::{input::AuxMetadata, tracks::TrackHandle};
 use std::{sync::Arc, time::Duration};
+use tokio::sync::RwLock;
 use url::Url;
 
-use crate::{errors::ParrotError, messaging::message::ParrotMessage};
+use crate::{
+    errors::ParrotError, guild::metadata_store::MetadataStore, messaging::message::ParrotMessage,
+};
 
 pub struct AuxMetadataTypeMapKey;
 
@@ -74,14 +77,15 @@ pub async fn create_embed_response(
     {
         Ok(val) => Ok(val),
         Err(err) => match err {
-            ParrotError::Serenity(Error::Http(HttpError::UnsuccessfulRequest(ref req))) => {
-                match req.error.code {
+            ParrotError::Serenity(ref serenity_error) => match **serenity_error {
+                Error::Http(HttpError::UnsuccessfulRequest(ref req)) => match req.error.code {
                     40060 => edit_embed_response(http, interaction, embed)
                         .await
                         .map(|_| ()),
                     _ => Err(err),
-                }
-            }
+                },
+                _ => Err(err),
+            },
             _ => Err(err),
         },
     }
@@ -98,20 +102,45 @@ pub async fn edit_embed_response(
         .map_err(Into::into)
 }
 
-pub async fn create_now_playing_embed(track: &TrackHandle) -> CreateEmbed {
+pub async fn get_track_metadata(
+    track: &TrackHandle,
+    data: &Arc<RwLock<TypeMap>>,
+) -> Result<AuxMetadata, ParrotError> {
+    let ctx_data = data.read().await;
+    let metadata_store = ctx_data.get::<MetadataStore>().unwrap();
+
+    let metadata = metadata_store
+        .retrieve_metadata(&track.uuid().to_string())
+        .ok_or(ParrotError::Other("Unable to retrieve metadata"))
+        .cloned()?;
+
+    drop(ctx_data);
+
+    Ok(metadata)
+
+    // let data = Arc::into_inner(track.data::<Arc<AuxMetadata>>())
+    //     .ok_or(ParrotError::Other("Unable to retrieve metadata"))?;
+
+    // Arc::into_inner(data).ok_or(ParrotError::Other("Unable to retrieve metadata"))
+}
+
+pub async fn create_now_playing_embed(
+    track: &TrackHandle,
+    data: &Arc<RwLock<TypeMap>>,
+) -> Result<CreateEmbed, ParrotError> {
     let mut embed = CreateEmbed::default();
-    let track_typemap_read_lock = track.typemap().read().await;
-    let metadata = track_typemap_read_lock
-        .get::<AuxMetadataTypeMapKey>()
-        .unwrap()
-        .clone();
+    let metadata = get_track_metadata(track, data).await?;
 
     embed = embed
         .author(CreateEmbedAuthor::new(format!(
             "{}",
             ParrotMessage::NowPlaying
         )))
-        .title(metadata.title.unwrap())
+        .title(
+            metadata
+                .title
+                .unwrap_or("Track doesn't have title".to_owned()),
+        )
         .url(metadata.source_url.clone().unwrap());
 
     let position = get_human_readable_timestamp(Some(track.get_info().await.unwrap().position));
@@ -130,7 +159,7 @@ pub async fn create_now_playing_embed(track: &TrackHandle) -> CreateEmbed {
 
     let (footer_text, footer_icon_url) = get_footer_info(&source_url);
 
-    embed.footer(CreateEmbedFooter::new(footer_text).icon_url(footer_icon_url))
+    Ok(embed.footer(CreateEmbedFooter::new(footer_text).icon_url(footer_icon_url)))
 }
 
 pub fn get_footer_info(url: &str) -> (String, String) {

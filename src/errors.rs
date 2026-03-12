@@ -5,7 +5,8 @@ use crate::messaging::messages::{
 };
 use rspotify::ClientError as RSpotifyClientError;
 use serenity::{model::mention::Mention, prelude::SerenityError};
-use songbird::error::PlayError;
+use songbird::error::{JoinError, PlayError};
+use std::boxed::Box;
 use std::fmt::{Debug, Display};
 use std::{error::Error, fmt};
 
@@ -22,10 +23,11 @@ pub enum ParrotError {
     NothingPlaying,
     TrackFail(PlayError),
     AlreadyConnected(Mention),
-    Serenity(SerenityError),
+    Serenity(Box<SerenityError>),
     RSpotify(RSpotifyClientError),
     IO(std::io::Error),
     Serde(serde_json::Error),
+    Join(Box<JoinError>),
 }
 
 /// `ParrotError` implements the [`Debug`] and [`Display`] traits
@@ -67,6 +69,7 @@ impl Display for ParrotError {
             Self::RSpotify(err) => f.write_str(&format!("{err}")),
             Self::IO(err) => f.write_str(&format!("{err}")),
             Self::Serde(err) => f.write_str(&format!("{err}")),
+            Self::Join(err) => f.write_str(&format!("{err}")),
         }
     }
 }
@@ -115,7 +118,7 @@ impl From<SerenityError> for ParrotError {
                 Self::NotInRange(param, value as isize, lower as isize, upper as isize)
             }
             SerenityError::Other(msg) => Self::Other(msg),
-            _ => Self::Serenity(err),
+            _ => Self::Serenity(Box::new(err)),
         }
     }
 }

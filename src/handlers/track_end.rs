@@ -5,18 +5,21 @@ use serenity::{
     model::id::GuildId,
     prelude::{Mutex, RwLock, TypeMap},
 };
-use songbird::{tracks::TrackHandle, Call, Event, EventContext, EventHandler};
+use songbird::{Call, Event, EventContext, EventHandler, tracks::TrackHandle};
 use std::sync::Arc;
 
 use crate::{
     commands::{
-        play::{normal_query_type_resolver, Mode},
+        play::{Mode, normal_query_type_resolver},
         queue::{
             build_single_nav_btn, calculate_num_pages, create_queue_embed, forget_queue_message,
         },
         voteskip::forget_skip_votes,
     },
-    guild::{cache::GuildCacheMap, settings::GuildSettingsMap, stored_queue::GuildStoredQueueMap},
+    guild::{
+        cache::GuildCacheMap, metadata_store::MetadataStore, settings::GuildSettingsMap,
+        stored_queue::GuildStoredQueueMap,
+    },
 };
 
 pub struct TrackEndHandler {
@@ -36,17 +39,23 @@ pub struct ModifyQueueHandler {
 #[async_trait]
 impl EventHandler for TrackEndHandler {
     async fn act(&self, _ctx: &EventContext<'_>) -> Option<Event> {
-        let data_rlock = self.ctx_data.read().await;
-        let (autopause, queue_loop) = data_rlock
-            .get::<GuildSettingsMap>()?
-            .get(&self.guild_id)
-            .map(|setting| (setting.autopause, setting.queue_loop))
-            .unwrap_or_default();
-        let guild_stored_queue = data_rlock
-            .get::<GuildStoredQueueMap>()?
-            .get(&self.guild_id)?
-            .clone();
-        drop(data_rlock);
+        let (autopause, queue_loop, guild_stored_queue) = {
+            let data_rlock = self.ctx_data.read().await;
+            let guild_setting = data_rlock
+                .get::<GuildSettingsMap>()?
+                .get(&self.guild_id)
+                .unwrap();
+            let guild_stored_queue = data_rlock
+                .get::<GuildStoredQueueMap>()?
+                .get(&self.guild_id)?
+                .clone();
+
+            (
+                guild_setting.autopause,
+                guild_setting.queue_loop,
+                guild_stored_queue,
+            )
+        };
 
         if autopause {
             let handler = self.call.lock().await;
@@ -55,9 +64,10 @@ impl EventHandler for TrackEndHandler {
         }
 
         if queue_loop && guild_stored_queue.continue_play {
-            let handler = self.call.lock().await;
-            let is_queue_empty = handler.queue().is_empty();
-            drop(handler);
+            let is_queue_empty = {
+                let handler = self.call.lock().await;
+                handler.queue().is_empty()
+            };
 
             if is_queue_empty {
                 for item in guild_stored_queue.queue {
@@ -74,6 +84,17 @@ impl EventHandler for TrackEndHandler {
                         println!("{}", err);
                     }
                 }
+            }
+        } else {
+            let current_track = {
+                let handler = self.call.lock().await;
+                handler.queue().current()
+            };
+
+            if let Some(track) = current_track {
+                let mut data = self.ctx_data.write().await;
+                let metadata_store = data.get_mut::<MetadataStore>().unwrap();
+                metadata_store.remove_metadata(&track.uuid().to_string());
             }
         }
 
@@ -116,18 +137,20 @@ pub async fn update_queue_messages(
         let mut page = page_lock.write().await;
         *page = usize::min(*page, num_pages - 1);
 
-        let embed = create_queue_embed(tracks, *page).await;
+        let embed = create_queue_embed(tracks, *page, ctx_data).await;
 
-        let edit_message = message
-            .edit(
-                &http,
-                build_nav_btns(EditMessage::new().add_embed(embed), *page, num_pages),
-            )
-            .await;
+        if let Ok(embed) = embed {
+            let edit_message = message
+                .edit(
+                    &http,
+                    build_nav_btns(EditMessage::new().add_embed(embed), *page, num_pages),
+                )
+                .await;
 
-        if edit_message.is_err() {
-            forget_queue_message(ctx_data, message, guild_id).await.ok();
-        };
+            if edit_message.is_err() {
+                forget_queue_message(ctx_data, message, guild_id).await.ok();
+            };
+        }
     }
 }
 

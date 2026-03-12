@@ -4,11 +4,11 @@ use crate::{
         queue::*, remove::*, repeat::*, repeat_queue::*, resume::*, seek::*, shuffle::*, skip::*,
         stop::*, summon::*, version::*, voteskip::*,
     },
-    connection::{check_voice_connections, Connection},
+    connection::{Connection, check_voice_connections},
     errors::ParrotError,
     guild::settings::{GuildSettings, GuildSettingsMap},
     handlers::track_end::update_queue_messages,
-    sources::spotify::{Spotify, SPOTIFY},
+    sources::spotify::{SPOTIFY, Spotify},
     utils::create_response_text,
 };
 use serenity::{

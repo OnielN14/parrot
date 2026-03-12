@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
-use serenity::model::id::GuildId;
-use songbird::typemap::TypeMapKey;
+use serenity::{model::id::GuildId, prelude::TypeMapKey};
 
 use crate::commands::play::QueryType;
 

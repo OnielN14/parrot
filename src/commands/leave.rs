@@ -9,10 +9,10 @@ pub async fn leave(ctx: &Context, interaction: &mut CommandInteraction) -> Resul
     let manager = songbird::get(ctx).await.unwrap();
     let mut data = ctx.data.write().await;
 
-    if let Some(stored_queue) = data.get_mut::<GuildStoredQueueMap>() {
-        if let Some(guild_stored_queue) = stored_queue.get_mut(&guild_id) {
-            guild_stored_queue.queue.clear();
-        }
+    if let Some(stored_queue) = data.get_mut::<GuildStoredQueueMap>()
+        && let Some(guild_stored_queue) = stored_queue.get_mut(&guild_id)
+    {
+        guild_stored_queue.queue.clear();
     }
 
     drop(data);

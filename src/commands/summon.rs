@@ -37,7 +37,14 @@ pub async fn summon(
     }
 
     // join channel
-    manager.join(guild_id, channel_id).await.unwrap();
+    match manager.join(guild_id, channel_id).await {
+        Ok(_) => {}
+        Err(err) => {
+            let _ = manager.remove(guild_id).await;
+            println!("{:?}", err);
+            return Err::<(), ParrotError>(ParrotError::Join(Box::new(err)));
+        }
+    }
 
     // register events
     if let Some(call) = manager.get(guild.id) {

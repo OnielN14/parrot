@@ -6,8 +6,8 @@ use std::{collections::HashMap, env, error::Error};
 
 use crate::{
     guild::{
-        cache::GuildCacheMap, http_client::HttpClientInstance, settings::GuildSettingsMap,
-        stored_queue::GuildStoredQueueMap,
+        cache::GuildCacheMap, http_client::HttpClientInstance, metadata_store::MetadataStore,
+        settings::GuildSettingsMap, stored_queue::GuildStoredQueueMap,
     },
     handlers::SerenityHandler,
 };
@@ -40,6 +40,7 @@ impl Client {
         data.insert::<GuildSettingsMap>(HashMap::default());
         data.insert::<GuildStoredQueueMap>(HashMap::default());
         data.insert::<HttpClientInstance>(reqwest::Client::new());
+        data.insert::<MetadataStore>(MetadataStore::new());
 
         drop(data);
 

@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        rust-version: ['1.74.0']
+        rust-version: ['1.93.0']
 
     steps:
       - name: Checkout sources
@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        rust-version: ['1.74.0']
+        rust-version: ['1.93.0']
 
     steps:
       - name: Checkout sources

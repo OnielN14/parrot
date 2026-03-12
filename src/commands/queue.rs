@@ -3,10 +3,10 @@ use crate::{
     guild::cache::GuildCacheMap,
     handlers::track_end::ModifyQueueHandler,
     messaging::messages::{
-        QUEUE_EXPIRED, QUEUE_NOTHING_IS_PLAYING, QUEUE_NOW_PLAYING, QUEUE_NO_SONGS, QUEUE_PAGE,
+        QUEUE_EXPIRED, QUEUE_NO_SONGS, QUEUE_NOTHING_IS_PLAYING, QUEUE_NOW_PLAYING, QUEUE_PAGE,
         QUEUE_PAGE_OF, QUEUE_UP_NEXT,
     },
-    utils::{get_human_readable_timestamp, AuxMetadataTypeMapKey},
+    utils::{get_human_readable_timestamp, get_track_metadata},
 };
 use serenity::{
     all::{
@@ -19,7 +19,7 @@ use serenity::{
     model::{channel::Message, id::GuildId},
     prelude::{RwLock, TypeMap},
 };
-use songbird::{tracks::TrackHandle, Event, TrackEvent};
+use songbird::{Event, TrackEvent, tracks::TrackHandle};
 use std::{
     cmp::{max, min},
     fmt::Write,
@@ -42,7 +42,8 @@ pub async fn queue(ctx: &Context, interaction: &mut CommandInteraction) -> Resul
 
     let num_pages = calculate_num_pages(&tracks);
     let message = build_nav_btns(
-        CreateInteractionResponseMessage::new().add_embed(create_queue_embed(&tracks, 0).await),
+        CreateInteractionResponseMessage::new()
+            .add_embed(create_queue_embed(&tracks, 0, &ctx.data).await?),
         0,
         num_pages,
     );
@@ -101,7 +102,7 @@ pub async fn queue(ctx: &Context, interaction: &mut CommandInteraction) -> Resul
 
         let message = build_nav_btns(
             CreateInteractionResponseMessage::new()
-                .add_embed(create_queue_embed(&tracks, *page_wlock).await),
+                .add_embed(create_queue_embed(&tracks, *page_wlock, &ctx.data).await?),
             *page_wlock,
             num_pages,
         );
@@ -125,15 +126,15 @@ pub async fn queue(ctx: &Context, interaction: &mut CommandInteraction) -> Resul
     Ok(())
 }
 
-pub async fn create_queue_embed(tracks: &[TrackHandle], page: usize) -> CreateEmbed {
+pub async fn create_queue_embed(
+    tracks: &[TrackHandle],
+    page: usize,
+    data: &Arc<RwLock<TypeMap>>,
+) -> Result<CreateEmbed, ParrotError> {
     let mut embed = CreateEmbed::new();
 
     let description = if !tracks.is_empty() {
-        let first_track_typemap_read_lock = tracks[0].typemap().read().await;
-        let metadata = first_track_typemap_read_lock
-            .get::<AuxMetadataTypeMapKey>()
-            .unwrap()
-            .clone();
+        let metadata = get_track_metadata(&tracks[0], data).await?;
         embed = embed.thumbnail(metadata.thumbnail.unwrap());
 
         format!(
@@ -148,7 +149,11 @@ pub async fn create_queue_embed(tracks: &[TrackHandle], page: usize) -> CreateEm
 
     embed = embed
         .field(QUEUE_NOW_PLAYING, &description, false)
-        .field(QUEUE_UP_NEXT, build_queue_page(tracks, page).await, false)
+        .field(
+            QUEUE_UP_NEXT,
+            build_queue_page(tracks, page, data).await,
+            false,
+        )
         .footer(CreateEmbedFooter::new(format!(
             "{} {} {} {}",
             QUEUE_PAGE,
@@ -157,7 +162,7 @@ pub async fn create_queue_embed(tracks: &[TrackHandle], page: usize) -> CreateEm
             calculate_num_pages(tracks),
         )));
 
-    embed
+    Ok(embed)
 }
 
 pub fn build_single_nav_btn(label: &str, is_disabled: bool) -> CreateButton {
@@ -185,7 +190,11 @@ pub fn build_nav_btns(
     message.components(components)
 }
 
-async fn build_queue_page(tracks: &[TrackHandle], page: usize) -> String {
+async fn build_queue_page(
+    tracks: &[TrackHandle],
+    page: usize,
+    data: &Arc<RwLock<TypeMap>>,
+) -> String {
     let start_idx = EMBED_PAGE_SIZE * page;
     let queue: Vec<&TrackHandle> = tracks
         .iter()
@@ -200,14 +209,22 @@ async fn build_queue_page(tracks: &[TrackHandle], page: usize) -> String {
     let mut description = String::new();
 
     for (i, t) in queue.iter().enumerate() {
-        let track_typemap_read_lock = t.typemap().read().await;
-        let metadata = track_typemap_read_lock
-            .get::<AuxMetadataTypeMapKey>()
-            .unwrap()
-            .clone();
-        let title = metadata.title.unwrap();
-        let url = metadata.source_url.unwrap();
-        let duration = get_human_readable_timestamp(metadata.duration);
+        let metadata = get_track_metadata(t, data).await;
+
+        let (title, url, duration): (String, String, String) = match metadata {
+            Ok(metadata) => {
+                let title = metadata.title.unwrap();
+                let url = metadata.source_url.unwrap();
+                let duration = get_human_readable_timestamp(metadata.duration);
+
+                (title, url, duration)
+            }
+            Err(_) => (
+                "Unable to retrieve title".to_string(),
+                "Unable to retrieve url".to_string(),
+                "Unable to retrieve duration".to_string(),
+            ),
+        };
 
         let _ = writeln!(
             description,

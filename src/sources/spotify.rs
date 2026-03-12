@@ -6,9 +6,9 @@ use crate::{
 use lazy_static::lazy_static;
 use regex::Regex;
 use rspotify::{
+    ClientCredsSpotify, Credentials,
     clients::BaseClient,
     model::{AlbumId, PlayableItem, PlaylistId, SimplifiedArtist, TrackId},
-    ClientCredsSpotify, Credentials,
 };
 use std::{env, str::FromStr};
 use tokio::sync::Mutex;
