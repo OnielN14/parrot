@@ -42,7 +42,7 @@ pub async fn summon(
         Err(err) => {
             let _ = manager.remove(guild_id).await;
             println!("{:?}", err);
-            return Err::<(), ParrotError>(ParrotError::Join(err));
+            return Err::<(), ParrotError>(ParrotError::Join(Box::new(err)));
         }
     }
 

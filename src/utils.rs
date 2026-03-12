@@ -77,14 +77,15 @@ pub async fn create_embed_response(
     {
         Ok(val) => Ok(val),
         Err(err) => match err {
-            ParrotError::Serenity(Error::Http(HttpError::UnsuccessfulRequest(ref req))) => {
-                match req.error.code {
+            ParrotError::Serenity(ref serenity_error) => match **serenity_error {
+                Error::Http(HttpError::UnsuccessfulRequest(ref req)) => match req.error.code {
                     40060 => edit_embed_response(http, interaction, embed)
                         .await
                         .map(|_| ()),
                     _ => Err(err),
-                }
-            }
+                },
+                _ => Err(err),
+            },
             _ => Err(err),
         },
     }

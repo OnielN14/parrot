@@ -455,7 +455,7 @@ async fn enqueue_track(
     if let Some(title) = &aux_metadata.title {
         let mut ctx_data = data.write().await;
         let metadata_store = ctx_data.get_mut::<MetadataStore>().unwrap();
-        metadata_store.insert_metadata(&track_handle.uuid().to_string(), aux_metadata.clone());
+        metadata_store.insert_metadata(track_handle.uuid().to_string(), aux_metadata.clone());
         drop(ctx_data);
         println!("[INFO] queueing {}", title);
     }

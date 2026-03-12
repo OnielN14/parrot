@@ -19,8 +19,8 @@ impl MetadataStore {
         self.store.get(song_reference)
     }
 
-    pub fn insert_metadata(&mut self, song_reference: &str, metadata: AuxMetadata) {
-        self.store.insert(song_reference.to_string(), metadata);
+    pub fn insert_metadata(&mut self, song_reference: String, metadata: AuxMetadata) {
+        self.store.insert(song_reference, metadata);
     }
 
     pub fn remove_metadata(&mut self, song_reference: &str) {
