@@ -103,7 +103,7 @@ impl EventHandler for TrackEndHandler {
             }
         }
 
-        forget_skip_votes(&self.ctx_data, self.guild_id).await.ok();
+        let _ = forget_skip_votes(&self.ctx_data, self.guild_id).await;
 
         None
     }
@@ -115,7 +115,10 @@ impl EventHandler for TrackErrorHandler {
         if let EventContext::Track(tracks) = ctx {
             for (state, handle) in tracks.iter() {
                 if let PlayMode::Errored(err) = &state.playing {
-                    println!("[ERROR] playback failed for track {}: {err:?}", handle.uuid());
+                    println!(
+                        "[ERROR] playback failed for track {}: {err:?}",
+                        handle.uuid()
+                    );
                 }
             }
         }
@@ -168,7 +171,7 @@ pub async fn update_queue_messages(
                 .await;
 
             if edit_message.is_err() {
-                forget_queue_message(ctx_data, message, guild_id).await.ok();
+                let _ = forget_queue_message(ctx_data, message, guild_id).await;
             };
         }
     }

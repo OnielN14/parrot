@@ -6,6 +6,10 @@ on:
 jobs:
   build:
     name: Build
+    env:
+      # rust-toolchain.toml pins "stable" for local development; force the
+      # matrix toolchain here so the build actually runs on the MSRV.
+      RUSTUP_TOOLCHAIN: ${{ matrix.rust-version }}
     strategy:
       matrix:
         rust-version: ["1.93.0"]
@@ -15,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust-version }}
 
