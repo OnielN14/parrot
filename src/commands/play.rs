@@ -426,12 +426,21 @@ async fn create_queued_embed(
 }
 
 fn get_track_source<'a>(http_client: reqwest::Client, query_type: QueryType) -> YoutubeDl<'a> {
-    match query_type {
+    let source = match query_type {
         QueryType::VideoLink(url) => YoutubeDl::new(http_client, url),
 
         QueryType::Keywords(query) => YoutubeDl::new_search(http_client, query),
         _ => unreachable!(),
-    }
+    };
+
+    // YouTube now rejects media URLs fetched right after they are extracted with
+    // "HTTP 403 Forbidden" (yt-dlp has to wait ~5s before downloading them).
+    // The `visionos` client still returns audio-only, immediately usable URLs,
+    // so prefer it over songbird's default client list.
+    source.user_args(vec![
+        "--extractor-args".to_string(),
+        "youtube:player_client=visionos".to_string(),
+    ])
 }
 
 async fn enqueue_track(

@@ -5,7 +5,10 @@ use serenity::{
     model::id::GuildId,
     prelude::{Mutex, RwLock, TypeMap},
 };
-use songbird::{Call, Event, EventContext, EventHandler, tracks::TrackHandle};
+use songbird::{
+    Call, Event, EventContext, EventHandler,
+    tracks::{PlayMode, TrackHandle},
+};
 use std::sync::Arc;
 
 use crate::{
@@ -28,6 +31,8 @@ pub struct TrackEndHandler {
     pub call: Arc<Mutex<Call>>,
     pub ctx_data: Arc<RwLock<TypeMap>>,
 }
+
+pub struct TrackErrorHandler;
 
 pub struct ModifyQueueHandler {
     pub http: Arc<Http>,
@@ -99,6 +104,21 @@ impl EventHandler for TrackEndHandler {
         }
 
         forget_skip_votes(&self.ctx_data, self.guild_id).await.ok();
+
+        None
+    }
+}
+
+#[async_trait]
+impl EventHandler for TrackErrorHandler {
+    async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+        if let EventContext::Track(tracks) = ctx {
+            for (state, handle) in tracks.iter() {
+                if let PlayMode::Errored(err) = &state.playing {
+                    println!("[ERROR] playback failed for track {}: {err:?}", handle.uuid());
+                }
+            }
+        }
 
         None
     }
