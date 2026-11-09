@@ -6,23 +6,25 @@ on:
 jobs:
   build:
     name: Build
+    env:
+      # rust-toolchain.toml pins "stable" for local development; force the
+      # matrix toolchain here so the build actually runs on the MSRV.
+      RUSTUP_TOOLCHAIN: ${{ matrix.rust-version }}
     strategy:
       matrix:
-        rust-version: ['1.93.0']
+        rust-version: ["1.93.0"]
     runs-on: ubuntu-latest
     steps:
       - name: Repository Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install Toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust-version }}
-          profile: minimal
-          override: true
 
       - name: Cache
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
 
       - name: Build Binary
         run: cargo build --locked

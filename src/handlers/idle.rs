@@ -36,11 +36,12 @@ impl EventHandler for IdleHandler {
 
         if self.count.fetch_add(1, Ordering::Relaxed) >= self.limit {
             let guild_id = self.interaction.guild_id?;
-            let call = self.manager.get(guild_id).unwrap();
 
-            let mut handler = call.lock().await;
-            handler.remove_all_global_events();
-            drop(handler);
+            if let Some(call) = self.manager.get(guild_id) {
+                let mut handler = call.lock().await;
+                handler.remove_all_global_events();
+                drop(handler);
+            }
 
             if self.manager.remove(guild_id).await.is_ok() {
                 self.count.store(0, Ordering::Relaxed);

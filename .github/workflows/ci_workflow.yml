@@ -2,12 +2,12 @@ name: CI Workflow
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
     paths-ignore:
-      - '**.md'
-      - 'docs/**'
+      - "**.md"
+      - "docs/**"
     types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
@@ -17,16 +17,19 @@ concurrency:
 jobs:
   build:
     name: Build
+    if: "!github.event.pull_request.draft"
     uses: ./.github/workflows/build.yml
     secrets: inherit
 
   lint:
     name: Lint
+    if: "!github.event.pull_request.draft"
     uses: ./.github/workflows/lint.yml
     secrets: inherit
 
   docker:
     name: Docker
+    if: "!github.event.pull_request.draft"
     needs: [build, lint]
     uses: ./.github/workflows/docker.yml
     secrets: inherit

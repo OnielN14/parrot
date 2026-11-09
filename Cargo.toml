@@ -20,13 +20,16 @@ url = "2.3.1"
 serde = "1.0.152"
 reqwest = "0.12"
 davey = "0.1.2"
-rustls = "0.23.37"
-aws-lc-rs = "1.16.1"
+# Keep rustls aligned with reqwest/serenity, which enable the `ring` provider.
+# Enabling rustls' default features here would also pull in `aws-lc-rs`, leaving
+# two CryptoProviders compiled and causing a runtime "could not determine the
+# process-level CryptoProvider" error.
+rustls = { version = "0.23.37", default-features = false, features = ["ring"] }
 
 [dependencies.songbird]
-# version = "0.5"
-git = "https://github.com/beerpsi-forks/songbird"
-branch = "davey"
+version = "0.6.1"
+# git = "https://github.com/beerpsi-forks/songbird"
+# branch = "davey"
 features = ["builtin-queue"]
 
 [dependencies.serenity]
@@ -40,7 +43,6 @@ features = [
   "gateway",
   "model",
   "rustls_backend",
-  "unstable_discord_api",
   "voice",
 ]
 

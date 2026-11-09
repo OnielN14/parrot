@@ -47,7 +47,7 @@ impl Client {
         Ok(Client { client })
     }
 
-    pub async fn start(&mut self) -> Result<(), serenity::Error> {
-        self.client.start().await
+    pub async fn start(&mut self) -> Result<(), Box<serenity::Error>> {
+        self.client.start().await.map_err(Box::new)
     }
 }

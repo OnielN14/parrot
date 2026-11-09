@@ -119,9 +119,7 @@ pub async fn queue(ctx: &Context, interaction: &mut CommandInteraction) -> Resul
         .await
         .unwrap();
 
-    forget_queue_message(&ctx.data, &mut message, guild_id)
-        .await
-        .ok();
+    let _ = forget_queue_message(&ctx.data, &mut message, guild_id).await;
 
     Ok(())
 }
@@ -248,12 +246,12 @@ pub async fn forget_queue_message(
     data: &Arc<RwLock<TypeMap>>,
     message: &mut Message,
     guild_id: GuildId,
-) -> Result<(), ()> {
+) -> Option<()> {
     let mut data_wlock = data.write().await;
-    let cache_map = data_wlock.get_mut::<GuildCacheMap>().ok_or(())?;
+    let cache_map = data_wlock.get_mut::<GuildCacheMap>()?;
 
-    let cache = cache_map.get_mut(&guild_id).ok_or(())?;
+    let cache = cache_map.get_mut(&guild_id)?;
     cache.queue_messages.retain(|(m, _)| m.id != message.id);
 
-    Ok(())
+    Some(())
 }

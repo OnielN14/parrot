@@ -7,50 +7,51 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
+    env:
+      # rust-toolchain.toml pins "stable" for local development; force the
+      # matrix toolchain here so lint actually runs on the MSRV.
+      RUSTUP_TOOLCHAIN: ${{ matrix.rust-version }}
     strategy:
       matrix:
-        rust-version: ['1.93.0']
+        rust-version: ["1.93.0"]
 
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install toolchain
-        id: toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust-version }}
           components: clippy
-          profile: minimal
-          override: true
 
       - name: Cache
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
 
       - name: Run clippy
-        uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: -- -D clippy::all -D warnings
+        run: cargo clippy -- -D clippy::all -D warnings
 
   rustfmt:
     name: Format
     runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: ${{ matrix.rust-version }}
     strategy:
       matrix:
-        rust-version: ['1.93.0']
+        rust-version: ["1.93.0"]
 
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust-version }}
           components: rustfmt
-          profile: minimal
-          override: true
+
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Run cargo fmt
         run: cargo fmt --all -- --check

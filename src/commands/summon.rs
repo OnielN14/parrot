@@ -1,7 +1,7 @@
 use crate::{
     connection::get_voice_channel_for_user,
     errors::ParrotError,
-    handlers::{IdleHandler, TrackEndHandler},
+    handlers::{IdleHandler, TrackEndHandler, TrackErrorHandler},
     messaging::message::ParrotMessage,
     utils::create_response,
 };
@@ -62,6 +62,8 @@ pub async fn summon(
                 count: Default::default(),
             },
         );
+
+        handler.add_global_event(Event::Track(TrackEvent::Error), TrackErrorHandler);
 
         handler.add_global_event(
             Event::Track(TrackEvent::End),
